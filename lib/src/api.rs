@@ -42,9 +42,9 @@ impl ConnectorConfig {
         ConnectorConfig::Specified(connector)
     }
 
-    pub fn take(self, handle: &Handle) -> Result<Box<Connector>, Error> {
+    pub fn take(self) -> Result<Box<Connector>, Error> {
         match self {
-            ConnectorConfig::Default => default_connector(&handle),
+            ConnectorConfig::Default => default_connector(),
             ConnectorConfig::Specified(connector) => Ok(connector)
         }
     }
@@ -72,8 +72,8 @@ impl Config {
         Ok(Api {
             inner: Rc::new(ApiInner {
                 token: self.token,
-                connector: self.connector.take(&handle)?,
-                handle: handle,
+                connector: self.connector.take()?,
+                handle,
             }),
         })
     }
