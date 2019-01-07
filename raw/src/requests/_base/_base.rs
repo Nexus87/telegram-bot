@@ -9,7 +9,7 @@ pub trait RequestType {
 }
 
 pub trait ResponseType {
-    type Type;
+    type Type: Send;
 
     fn deserialize(resp: HttpResponse) -> Result<Self::Type, Error>;
 }

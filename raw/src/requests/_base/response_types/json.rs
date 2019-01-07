@@ -6,7 +6,7 @@ use types::*;
 
 pub trait JsonResponse {
     type Raw;
-    type Type;
+    type Type: Send;
 
     fn map(raw: Self::Raw) -> Self::Type;
 }
@@ -15,7 +15,7 @@ pub struct JsonIdResponse<Type> {
     phantom: ::std::marker::PhantomData<Type>,
 }
 
-impl<Type> JsonResponse for JsonIdResponse<Type> {
+impl<Type> JsonResponse for JsonIdResponse<Type> where Type: Send {
     type Raw = Type;
     type Type = Type;
 

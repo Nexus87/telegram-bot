@@ -1,21 +1,21 @@
 extern crate futures;
 extern crate telegram_bot;
-extern crate tokio_core;
+extern crate tokio;
 
 use std::env;
 
 use futures::Stream;
-use tokio_core::reactor::Core;
 use telegram_bot::*;
 
 fn main() {
-    let mut core = Core::new().unwrap();
 
     let token = env::var("TELEGRAM_BOT_TOKEN").unwrap();
-    let api = Api::configure(token).build(core.handle()).unwrap();
+    let api = Api::configure(token).build().unwrap();
 
     // Fetch new updates via long poll method
-    let future = api.stream().for_each(|update| {
+    let stream= api.stream()
+        .map_err(|_| ())
+        .for_each(move |update| {
 
         // If the received update contains a new message...
         if let UpdateKind::Message(message) = update.kind {
@@ -34,5 +34,5 @@ fn main() {
         Ok(())
     });
 
-    core.run(future).unwrap();
+    tokio::run(stream);
 }

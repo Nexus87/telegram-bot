@@ -4,9 +4,8 @@ error_chain! {
     foreign_links {
         Url(::hyper::http::uri::InvalidUri) #[cfg(feature = "hyper_connector")];
         Hyper(::hyper::Error) #[cfg(feature = "hyper_connector")];
-        Curl(::curl::Error) #[cfg(feature = "curl_connector")];
-        CurlPerformError(::tokio_curl::PerformError) #[cfg(feature = "curl_connector")];
         Io(::std::io::Error);
+        Tokio(::tokio_timer::Error);
     }
 
     links {

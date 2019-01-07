@@ -2,7 +2,6 @@
 
 use std::fmt;
 use std::str::FromStr;
-use std::rc::Rc;
 
 use futures::{Future, Stream};
 use futures::future::result;
@@ -20,10 +19,11 @@ use future::{TelegramFuture, NewTelegramFuture};
 use super::_base::Connector;
 use hyper::Body;
 use hyper::client::connect::Connect;
+use std::sync::Arc;
 
 /// This connector uses `hyper` backend.
 pub struct HyperConnector<C> {
-    inner: Rc<Client<C>>
+    inner: Arc<Client<C>>
 }
 
 impl<C> fmt::Debug for HyperConnector<C> {
@@ -35,7 +35,7 @@ impl<C> fmt::Debug for HyperConnector<C> {
 impl<C> HyperConnector<C> {
     pub fn new(client: Client<C>) -> Self {
         HyperConnector {
-            inner: Rc::new(client)
+            inner: Arc::new(client)
         }
     }
 }

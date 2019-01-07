@@ -1,28 +1,24 @@
-use std::borrow::Borrow;
-use std::rc::Rc;
 use std::time::Duration;
 
 use futures::{Future};
 use futures::future::{result};
-use tokio_core::reactor::{Handle, Timeout};
-
 use telegram_bot_raw::{Request, ResponseType};
 
 use connector::{Connector, default_connector};
 use errors::Error;
 use future::{TelegramFuture, NewTelegramFuture};
 use stream::{NewUpdatesStream, UpdatesStream};
+use std::sync::Arc;
 
 /// Main type for sending requests to the Telegram bot API.
 #[derive(Clone)]
 pub struct Api {
-    inner: Rc<ApiInner>,
+    inner: Arc<ApiInner>,
 }
 
 struct ApiInner {
     token: String,
     connector: Box<Connector>,
-    handle: Handle,
 }
 
 #[derive(Debug)]
@@ -67,13 +63,11 @@ impl Config {
     }
 
     /// Create new `Api` instance.
-    pub fn build<H: Borrow<Handle>>(self, handle: H) -> Result<Api, Error> {
-        let handle = handle.borrow().clone();
+    pub fn build(self) -> Result<Api, Error> {
         Ok(Api {
-            inner: Rc::new(ApiInner {
+            inner: Arc::new(ApiInner {
                 token: self.token,
                 connector: self.connector.take()?,
-                handle,
             }),
         })
     }
@@ -150,7 +144,7 @@ impl Api {
     /// # }
     /// ```
     pub fn stream(&self) -> UpdatesStream {
-        UpdatesStream::new(self.clone(), self.inner.handle.clone())
+        UpdatesStream::new(self.clone())
     }
 
     /// Send a request to the Telegram server and do not wait for a response.
@@ -176,7 +170,8 @@ impl Api {
     /// # }
     /// # }
     pub fn spawn<Req: Request>(&self, request: Req) {
-        self.inner.handle.spawn(self.send(request).then(|_| Ok(())))
+        let send = self.send(request).then(|_| Ok(()));
+        tokio::executor::spawn(send);
     }
 
     /// Send a request to the Telegram server and wait for a response, timing out after `duration`.
@@ -208,9 +203,9 @@ impl Api {
         &self, request: Req, duration: Duration)
         -> TelegramFuture<Option<<Req::Response as ResponseType>::Type>> {
 
-        let timeout_future = result(Timeout::new(duration, &self.inner.handle))
-            .flatten().map_err(From::from).map(|()| None);
-        let send_future = self.send(request).map(|resp| Some(resp));
+        let timeout_future = tokio_timer::sleep(duration)
+            .from_err().map(|()| None);
+        let send_future = self.send(request).map(Some);
 
         let future = timeout_future.select(send_future)
             .map(|(item, _next)| item)
