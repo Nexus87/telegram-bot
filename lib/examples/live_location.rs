@@ -1,16 +1,15 @@
 extern crate futures;
 extern crate telegram_bot;
-extern crate tokio_core;
+extern crate tokio;
 
 use std::env;
 use std::time::Duration;
 
 use futures::{Future, Stream};
-use tokio_core::reactor::{Handle, Core, Timeout};
 use telegram_bot::*;
 
-fn test(api: Api, message: Message, handle: Handle) {
-    let timeout = |n| Timeout::new(Duration::from_secs(n), &handle).unwrap().map_err(From::from);
+fn test(api: Api, message: Message) {
+    let timeout = |n| tokio_timer::sleep(Duration::from_secs(n)).map_err(From::from);
     let api_future = || Ok(api.clone());
 
     let future = api.send(message.location_reply(0.0, 0.0).live_period(60))
@@ -21,28 +20,27 @@ fn test(api: Api, message: Message, handle: Handle) {
         .join(api_future()).join(timeout(6))
         .and_then(|((message, api), _)| api.send(message.edit_live_location(30.0, 30.0)));
 
-    handle.spawn(future.then(|_| Ok(())))
+    tokio::executor::spawn(future.then(|_| Ok(())));
 }
 
 fn main() {
     let token = env::var("TELEGRAM_BOT_TOKEN").unwrap();
 
-    let mut core = Core::new().unwrap();
-    let handle = core.handle();
+    let api = Api::configure(token).build().unwrap();
 
-    let api = Api::configure(token).build(core.handle()).unwrap();
-
-    let future = api.stream().for_each(|update| {
+    let future = api.stream().for_each(move |update| {
         if let UpdateKind::Message(message) = update.kind {
             if let MessageKind::Text {ref data, ..} = message.kind {
                 match data.as_str() {
-                    "/livelocation" => test(api.clone(), message.clone(), handle.clone()),
+                    "/livelocation" => test(api.clone(), message.clone()),
                     _ => (),
                 }
             }
         }
         Ok(())
-    });
+    })
+        .map(|_| ())
+        .map_err(|_| ());
 
-    core.run(future).unwrap();
+    tokio::run(future);
 }

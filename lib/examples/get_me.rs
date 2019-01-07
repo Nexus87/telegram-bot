@@ -1,18 +1,16 @@
 extern crate telegram_bot;
-extern crate tokio_core;
+extern crate tokio;
 
 use std::env;
 
-use tokio_core::reactor::Core;
 use telegram_bot::{Api, GetMe};
+use tokio::prelude::future::*;
 
 fn main() {
     let token = env::var("TELEGRAM_BOT_TOKEN").unwrap();
 
-    let mut core = Core::new().unwrap();
+    let api = Api::configure(token).build().unwrap();
+    let future = api.send(GetMe).map_err(|_| ()).map(|_| ());
 
-    let api = Api::configure(token).build(core.handle()).unwrap();
-    let future = api.send(GetMe);
-
-    println!("{:?}", core.run(future))
+    println!("{:?}", tokio::run(future))
 }
