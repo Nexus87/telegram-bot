@@ -25,8 +25,6 @@ pub mod connector;
 pub mod prelude;
 pub mod types;
 
-pub use telegram_bot_raw::types::*;
-
 pub use self::api::{Api, Config};
 pub use connector::*;
 pub use self::errors::{Error, ErrorKind};
