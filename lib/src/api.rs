@@ -166,6 +166,31 @@ impl Api {
         tokio::executor::spawn(send);
     }
 
+    /// Send a request to the Telegram server and do not wait for a response.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// # extern crate futures;
+    /// # extern crate telegram_bot;
+    /// # extern crate tokio;
+    /// # use futures::Future;
+    /// # use telegram_bot::{Api, GetMe, ChatId};
+    /// # use telegram_bot::prelude::*;
+    /// #
+    /// # fn main() {
+    /// # let telegram_token = "token";
+    /// # let api = Api::configure(telegram_token).build().unwrap();
+    /// # if false {
+    /// let chat = ChatId::new(61031);
+    /// api.run(chat.text("Message"))
+    /// # }
+    /// # }
+    pub fn run<Req: Request>(&self, request: Req) {
+        let send = self.send(request).then(|_| Ok(()));
+        tokio::run(send);
+    }
+
     /// Send a request to the Telegram server and wait for a response, timing out after `duration`.
     /// Future will resolve to `None` if timeout fired.
     ///
