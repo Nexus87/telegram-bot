@@ -1,14 +1,14 @@
 use std::cmp::max;
 use std::collections::VecDeque;
+use std::pin::Pin;
 use std::time::Duration;
 
-use futures::{Future, Stream, Poll, Async};
+use futures::task::{Context, Poll};
+use futures::{Future, FutureExt, Stream};
+use telegram_bot_raw::{GetUpdates, Integer, Update};
 
-use telegram_bot_raw::{GetUpdates, Update, Integer};
-
-use api::Api;
-use errors::Error;
-use future::{TelegramFuture, NewTelegramFuture};
+use crate::api::Api;
+use crate::errors::Error;
 
 const TELEGRAM_LONG_POLL_TIMEOUT_SECONDS: u64 = 5;
 const TELEGRAM_LONG_POLL_ERROR_DELAY_MILLISECONDS: u64 = 500;
@@ -20,61 +20,65 @@ pub struct UpdatesStream {
     api: Api,
     last_update: Integer,
     buffer: VecDeque<Update>,
-    current_request: Option<TelegramFuture<Option<Vec<Update>>>>,
+    current_request: Option<Pin<Box<dyn Future<Output = Result<Option<Vec<Update>>, Error>>>>>,
     timeout: Duration,
-    error_delay: Duration
+    error_delay: Duration,
 }
 
 impl Stream for UpdatesStream {
-    type Item = Update;
-    type Error = Error;
+    type Item = Result<Update, Error>;
 
-    fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
-        if let Some(value) = self.buffer.pop_front() {
-            return Ok(Async::Ready(Some(value)))
+    fn poll_next(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
+        let mut_ref = self.get_mut();
+        if let Some(value) = mut_ref.buffer.pop_front() {
+            return Poll::Ready(Some(Ok(value)));
         }
 
-        let result = match self.current_request {
+        let result = match mut_ref.current_request {
             None => Ok(false),
             Some(ref mut current_request) => {
-                let polled_update = current_request.poll();
+                let polled_update = current_request.as_mut().poll(cx);
                 match polled_update {
-                    Ok(Async::NotReady) => return Ok(Async::NotReady),
-                    Ok(Async::Ready(None)) => Ok(false),
-                    Ok(Async::Ready(Some(updates))) => {
+                    Poll::Pending => return Poll::Pending,
+                    Poll::Ready(Ok(None)) => Ok(false),
+                    Poll::Ready(Ok(Some(updates))) => {
                         for update in updates {
-                            self.last_update = max(update.id, self.last_update);
-                            self.buffer.push_back(update)
+                            mut_ref.last_update = max(update.id, mut_ref.last_update);
+                            mut_ref.buffer.push_back(update)
                         }
                         Ok(true)
-                    },
-                    Err(err) => Err(err)
+                    }
+                    Poll::Ready(Err(err)) => Err(err),
                 }
             }
         };
-
         match result {
             Err(err) => {
-                let timeout_future = tokio_timer::sleep(self.error_delay)
-                    .from_err().map(|()| None);
-
-                self.current_request = Some(TelegramFuture::new(Box::new(timeout_future)));
-                return Err(err)
+                let timeout_future = tokio::time::delay_for(mut_ref.error_delay)
+                    .map(|_| Ok(None))
+                    .boxed();
+                mut_ref.current_request = Some(timeout_future);
+                return Poll::Ready(Some(Err(err)));
             }
             Ok(false) => {
-                let timeout = self.timeout + Duration::from_secs(1);
+                let api = mut_ref.api.clone();
+                let mut get_updates = GetUpdates::new();
+                get_updates
+                    .offset(mut_ref.last_update + 1)
+                    .timeout(mut_ref.timeout.as_secs() as Integer);
+                let timeout = mut_ref.timeout + Duration::from_secs(1);
 
-                let request = self.api.send_timeout(GetUpdates::new()
-                    .offset(self.last_update + 1)
-                    .timeout(self.timeout.as_secs() as Integer)
-                , timeout);
+                let request = api.send_timeout(
+                    get_updates,
+                    timeout,
+                );
 
-                self.current_request = Some(request);
-                self.poll()
-            },
+                mut_ref.current_request = Some(Box::pin(request));
+                Pin::new(mut_ref).poll_next(cx)
+            }
             Ok(true) => {
-                self.current_request = None;
-                self.poll()
+                mut_ref.current_request = None;
+                Pin::new(mut_ref).poll_next(cx)
             }
         }
     }
@@ -84,7 +88,7 @@ pub trait NewUpdatesStream {
     fn new(api: Api) -> Self;
 }
 
-impl NewUpdatesStream for UpdatesStream{
+impl NewUpdatesStream for UpdatesStream {
     fn new(api: Api) -> Self {
         UpdatesStream {
             api,
@@ -92,7 +96,7 @@ impl NewUpdatesStream for UpdatesStream{
             buffer: VecDeque::new(),
             current_request: None,
             timeout: Duration::from_secs(TELEGRAM_LONG_POLL_TIMEOUT_SECONDS),
-            error_delay: Duration::from_millis(TELEGRAM_LONG_POLL_ERROR_DELAY_MILLISECONDS)
+            error_delay: Duration::from_millis(TELEGRAM_LONG_POLL_ERROR_DELAY_MILLISECONDS),
         }
     }
 }

@@ -17,7 +17,6 @@ extern crate core;
 
 mod api;
 mod errors;
-mod future;
 mod macros;
 mod stream;
 
@@ -28,7 +27,6 @@ pub mod types;
 pub use self::api::{Api, Config};
 pub use connector::*;
 pub use self::errors::{Error, ErrorKind};
-pub use self::future::TelegramFuture;
 pub use stream::UpdatesStream;
 pub use prelude::*;
 pub use types::*;

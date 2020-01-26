@@ -12,13 +12,13 @@ pub use self::_base::Connector;
 #[cfg(feature = "hyper_connector")]
 pub use self::hyper::HyperConnector;
 
-use errors::Error;
+use crate::errors::Error;
 
 
 /// Returns default connector.
 ///
 /// See module level documentation for details.
 #[cfg(all(feature = "hyper_connector"))]
-pub fn default_connector() -> Result<Box<Connector>, Error> {
+pub fn default_connector() -> Result<Box<dyn Connector>, Error> {
     hyper::default_connector()
 }
