@@ -9,10 +9,10 @@ use hyper::header;
 use hyper::http::Request;
 use hyper::{Method, Uri};
 use hyper_tls::HttpsConnector;
-
+use hyper::http::Error as HttpError;
 use telegram_bot_raw::{Body as TelegramBody, HttpRequest, HttpResponse, Method as TelegramMethod};
 
-use crate::errors::Error;
+use crate::errors::{Error, ErrorKind};
 
 use super::_base::Connector;
 use hyper::client::connect::Connect;
@@ -46,7 +46,7 @@ impl<C: Connect + Sync + Send + Clone + 'static> Connector for HyperConnector<C>
         let uri = Uri::from_str(&req.url.url(token));
         let client = self.inner.clone();
         let future = async move {
-            let uri = uri?;
+            let uri = uri.map_err(HttpError::from).map_err(ErrorKind::from)?;
             let method = match req.method {
                 TelegramMethod::Get => Method::GET,
                 TelegramMethod::Post => Method::POST,
@@ -63,7 +63,9 @@ impl<C: Connect + Sync + Send + Clone + 'static> Connector for HyperConnector<C>
                 body => panic!("Unknown body type {:?}", body),
             };
 
-            let response = client.request(http_request).await?;
+            let response = client.request(http_request)
+            .await
+            .map_err(ErrorKind::from)?;
 
             let body = hyper::body::to_bytes(response.into_body())
                 .await

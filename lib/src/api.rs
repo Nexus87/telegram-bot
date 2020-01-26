@@ -1,7 +1,7 @@
 use crate::connector::{default_connector, Connector};
-use crate::errors::Error;
+use crate::errors::{Error, ErrorKind};
 use crate::stream::{NewUpdatesStream, UpdatesStream};
-use futures::{Future};
+use futures::Future;
 use std::sync::Arc;
 use std::time::Duration;
 use telegram_bot_raw::{Request, ResponseType, HttpRequest};
@@ -190,7 +190,7 @@ impl Api {
         let api = self.clone();
         let request = request.serialize();
         async move {
-            match tokio::time::timeout(duration, api.send_http_request::<Req::Response>(request?)).await {
+            match tokio::time::timeout(duration, api.send_http_request::<Req::Response>(request.map_err(ErrorKind::from)?)).await {
                 Err(_) => Ok(None),
                 Ok(Ok(result)) => Ok(Some(result)),
                 Ok(Err(error)) => Err(error),
@@ -225,12 +225,13 @@ impl Api {
     ) -> Result<<Req::Response as ResponseType>::Type, Error> {
         let request = request.serialize();
         let api = self.clone();
-        let request = request?;
+        let request = request.map_err(ErrorKind::from)?;
         let ref token = api.0.token;
         let response = api.0.connector.request(token, request);
 
         let response = response.await?;
-        Req::Response::deserialize(response).map_err(From::from)
+        let response = Req::Response::deserialize(response).map_err(ErrorKind::from)?;
+        Ok(response)
     }
 
     async fn send_http_request<Resp: ResponseType>(
@@ -241,6 +242,7 @@ impl Api {
         let response = self.0.connector.request(token, request);
 
         let response = response.await?;
-        Resp::deserialize(response).map_err(From::from)
+        let response = Resp::deserialize(response).map_err(ErrorKind::from)?;
+        Ok(response)
     }
 }

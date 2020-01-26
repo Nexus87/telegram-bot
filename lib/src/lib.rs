@@ -2,8 +2,6 @@
 //! See [readme](https://github.com/telegram-rs/telegram-bot) for details.
 
 extern crate antidote;
-#[macro_use]
-extern crate error_chain;
 extern crate futures;
 extern crate tokio;
 extern crate tokio_timer;
@@ -26,7 +24,7 @@ pub mod types;
 
 pub use self::api::{Api, Config};
 pub use connector::*;
-pub use self::errors::{Error, ErrorKind};
+pub use self::errors::Error;
 pub use stream::UpdatesStream;
 pub use prelude::*;
 pub use types::*;
