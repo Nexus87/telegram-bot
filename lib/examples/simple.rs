@@ -4,19 +4,19 @@ extern crate tokio;
 
 use std::env;
 
-use futures::Stream;
+use futures::StreamExt;
 use telegram_bot::*;
 
-fn main() {
+#[tokio::main]
+async fn main() -> Result<(), Error>{
 
     let token = env::var("TELEGRAM_BOT_TOKEN").unwrap();
     let api = Api::configure(token).build().unwrap();
 
     // Fetch new updates via long poll method
-    let stream= api.stream()
-        .map_err(|_| ())
-        .for_each(move |update| {
-
+    let mut stream= api.stream();
+    while let Some(update) = stream.next().await {
+        let update = update?;
         // If the received update contains a new message...
         if let UpdateKind::Message(message) = update.kind {
 
@@ -25,14 +25,13 @@ fn main() {
                 println!("<{}>: {}", &message.from.first_name, data);
 
                 // Answer message with "Hi".
-                api.spawn(message.text_reply(
+                api.send(message.text_reply(
                     format!("Hi, {}! You just wrote '{}'", &message.from.first_name, data)
-                ));
+                )).await?;
             }
         }
 
-        Ok(())
-    });
+    };
+    Ok(())
 
-    tokio::run(stream);
 }

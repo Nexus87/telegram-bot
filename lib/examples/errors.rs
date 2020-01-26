@@ -3,26 +3,19 @@ extern crate telegram_bot;
 extern crate tokio;
 
 use std::env;
-
-use futures::Stream;
+use futures::{StreamExt};
 use telegram_bot::*;
 
-fn main() {
+#[tokio::main]
+async fn main() {
 
     let token = env::var("TELEGRAM_BOT_TOKEN").unwrap();
     let api = Api::configure(token).build().unwrap();
-
     // Convert stream to the stream with errors in result
-    let stream = api.stream().then(|mb_update| {
-        let res: Result<Result<Update, Error>, ()> = Ok(mb_update);
-        res
-    });
+    let mut stream = api.stream();
 
     // Print update or error for each update.
-    let future = stream.for_each(|mb_update| {
+    while let Some(mb_update) = stream.next().await {
         println!("{:?}", mb_update);
-        Ok(())
-    });
-
-    tokio::run(future);
+    }
 }

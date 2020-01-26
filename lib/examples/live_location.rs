@@ -1,46 +1,45 @@
-extern crate futures;
-extern crate telegram_bot;
-extern crate tokio;
-
 use std::env;
 use std::time::Duration;
 
-use futures::{Future, Stream};
+use futures::StreamExt;
 use telegram_bot::*;
+use tokio::time::delay_for;
 
-fn test(api: Api, message: Message) {
-    let timeout = |n| tokio_timer::sleep(Duration::from_secs(n)).map_err(From::from);
-    let api_future = || Ok(api.clone());
+const DELAY_DURATION: Duration = Duration::from_secs(2);
 
-    let future = api.send(message.location_reply(0.0, 0.0).live_period(60))
-        .join(api_future()).join(timeout(2))
-        .and_then(|((message, api), _)| api.send(message.edit_live_location(10.0, 10.0)))
-        .join(api_future()).join(timeout(4))
-        .and_then(|((message, api), _)| api.send(message.edit_live_location(20.0, 20.0)))
-        .join(api_future()).join(timeout(6))
-        .and_then(|((message, api), _)| api.send(message.edit_live_location(30.0, 30.0)));
+async fn test(api: Api, message: Message) -> Result<(), Error> {
+    let reply = api
+        .send(message.location_reply(0.0, 0.0).live_period(60))
+        .await?;
 
-    tokio::executor::spawn(future.then(|_| Ok(())));
+    delay_for(DELAY_DURATION).await;
+    api.send(reply.edit_live_location(10.0, 10.0)).await?;
+
+    delay_for(DELAY_DURATION).await;
+    api.send(reply.edit_live_location(20.0, 20.0)).await?;
+
+    delay_for(DELAY_DURATION).await;
+    api.send(reply.edit_live_location(30.0, 30.0)).await?;
+
+    Ok(())
 }
-
-fn main() {
+#[tokio::main]
+async fn main() -> Result<(), Error> {
     let token = env::var("TELEGRAM_BOT_TOKEN").unwrap();
 
     let api = Api::configure(token).build().unwrap();
+    let mut stream = api.stream();
 
-    let future = api.stream().for_each(move |update| {
+    while let Some(update) = stream.next().await {
+        let update = update?;
         if let UpdateKind::Message(message) = update.kind {
-            if let MessageKind::Text {ref data, ..} = message.kind {
+            if let MessageKind::Text { ref data, .. } = message.kind {
                 match data.as_str() {
-                    "/livelocation" => test(api.clone(), message.clone()),
+                    "/livelocation" => test(api.clone(), message.clone()).await?,
                     _ => (),
                 }
             }
         }
-        Ok(())
-    })
-        .map(|_| ())
-        .map_err(|_| ());
-
-    tokio::run(future);
+    }
+    Ok(())
 }

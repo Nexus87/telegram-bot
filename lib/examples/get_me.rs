@@ -3,14 +3,14 @@ extern crate tokio;
 
 use std::env;
 
-use telegram_bot::{Api, GetMe};
-use tokio::prelude::future::*;
+use telegram_bot::{Api, GetMe, Error};
 
-fn main() {
+#[tokio::main]
+async fn main() -> Result<(), Error> {
     let token = env::var("TELEGRAM_BOT_TOKEN").unwrap();
 
     let api = Api::configure(token).build().unwrap();
-    let future = api.send(GetMe).map_err(|_| ()).map(|_| ());
-
-    println!("{:?}", tokio::run(future))
+    let result = api.send(GetMe).await?;
+    println!("{:?}", result);
+    Ok(())
 }

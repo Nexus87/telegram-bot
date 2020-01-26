@@ -68,13 +68,38 @@ impl Config {
 }
 
 impl Api {
+    /// Create a new `Api` instance.
+    ///
+    /// # Example
+    ///
+    /// Using default connector.
+    ///
+    /// ```
+    /// use telegram_bot::Api;
+    ///
+    /// # fn main() {
+    /// # let telegram_token = "token";
+    /// let api = Api::new(telegram_token);
+    /// # }
+    /// ```
+    pub fn new<T: AsRef<str>>(token: T) -> Self {
+        Self::with_connector(token, default_connector().unwrap())
+    }
+
+    /// Create a new `Api` instance wtih custom connector.
+    pub fn with_connector<T: AsRef<str>>(token: T, connector: Box<dyn Connector>) -> Self {
+        Api(Arc::new(ApiInner {
+            token: token.as_ref().to_string(),
+            connector,
+        }))
+    }
     /// Start construction of the `Api` instance.
     ///
     /// # Examples
     ///
     /// Using default connector.
     ///
-    /// ```rust
+    /// ```
     /// # extern crate telegram_bot;
     /// # extern crate tokio;
     /// use telegram_bot::Api;
@@ -88,7 +113,7 @@ impl Api {
     /// Using custom connector.
     ///
     ///
-    /// ```rust
+    /// ```
     /// # extern crate telegram_bot;
     /// # extern crate tokio;
     /// # #[cfg(feature = "hyper_connector")]
@@ -105,6 +130,7 @@ impl Api {
     /// # #[cfg(not(feature = "hyper_connector"))]
     /// # fn main() {}
     /// ```
+    /// 
     pub fn configure<T: AsRef<str>>(token: T) -> Config {
         Config {
             token: token.as_ref().to_string(),
@@ -116,69 +142,39 @@ impl Api {
     ///
     /// # Examples
     ///
-    /// ```rust
-    /// # extern crate futures;
-    /// # extern crate telegram_bot;
-    /// # extern crate tokio;
+    /// ```
     /// # use telegram_bot::Api;
-    /// # fn main() {
-    /// # let api: Api = Api::configure("token").build().unwrap();
-    /// use futures::Stream;
+    /// use futures::StreamExt;
     ///
-    /// let future = api.stream().for_each(|update| {
+    /// # #[tokio::main]
+    /// # async fn main() {
+    /// # let api: Api = Api::new("token");
+    ///
+    /// let mut stream = api.stream();
+    /// let update = stream.next().await;
     ///     println!("{:?}", update);
-    ///     Ok(())
-    /// });
     /// # }
     /// ```
     pub fn stream(&self) -> UpdatesStream {
         UpdatesStream::new(self.clone())
     }
 
-    /// Send a request to the Telegram server and wait for a response.
-    ///
-    /// # Examples
-    ///
-    /// ```rust
-    /// # extern crate futures;
-    /// # extern crate telegram_bot;
-    /// # extern crate tokio;
-    /// # use futures::Future;
-    /// # use telegram_bot::{Api, GetMe, ChatId};
-    /// # use telegram_bot::prelude::*;
-    /// #
-    /// # fn main() {
-    /// # let telegram_token = "token";
-    /// # let api = Api::configure(telegram_token).build().unwrap();
-    /// # if false {
-    /// let chat = ChatId::new(61031);
-    /// api.run(chat.text("Message"))
-    /// # }
-    /// # }
-    // pub async fn send<Req: Request>(&self, request: Req) -> () {
-    //     self.send(request).await;
-    // }
-
     /// Send a request to the Telegram server and wait for a response, timing out after `duration`.
     /// Future will resolve to `None` if timeout fired.
     ///
     /// # Examples
     ///
-    /// ```rust
-    /// # extern crate futures;
-    /// # extern crate telegram_bot;
-    /// # extern crate tokio;
-    /// # use futures::Future;
+    /// ```
     /// # use telegram_bot::{Api, GetMe};
+    /// # use std::time::Duration;
     /// #
-    /// # fn main() {
+    /// # #[tokio::main]
+    /// # async fn main() {
     /// # let telegram_token = "token";
-    /// # let api = Api::configure(telegram_token).build().unwrap();
+    /// # let api = Api::new(telegram_token);
     /// # if false {
-    /// use std::time::Duration;
-    ///
-    /// let future = api.send_timeout(GetMe, Duration::from_secs(5));
-    /// future.and_then(|me| Ok(assert!(me.is_some())));
+    /// let result = api.send_timeout(GetMe, Duration::from_secs(2)).await;
+    /// println!("{:?}", result);
     /// # }
     /// # }
     /// ```
@@ -202,19 +198,16 @@ impl Api {
     ///
     /// # Examples
     ///
-    /// ```rust
-    /// # extern crate futures;
-    /// # extern crate telegram_bot;
-    /// # extern crate tokio;
-    /// # use futures::Future;
+    /// ```
     /// # use telegram_bot::{Api, GetMe};
     /// #
-    /// # fn main() {
+    /// # #[tokio::main]
+    /// # async fn main() {
     /// # let telegram_token = "token";
-    /// # let api = Api::configure(telegram_token).build().unwrap();
+    /// # let api = Api::new(telegram_token);
     /// # if false {
-    /// let future = api.send(GetMe);
-    /// future.and_then(|me| Ok(println!("{:?}", me)));
+    /// let result = api.send(GetMe).await;
+    /// println!("{:?}", result);
     /// # }
     /// # }
     /// ```
