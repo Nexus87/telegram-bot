@@ -4,3 +4,4 @@ Cargo.lock
 *.sublime-project
 
 bot-token.sh
+.idea
