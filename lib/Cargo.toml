@@ -23,12 +23,11 @@ futures = "0.3"
 telegram-bot-raw = { version = "=0.6.1", path = "../raw" }
 
 [dependencies.hyper]
-version = "0.14"
-features = ["full"]
+version = "0.13"
 optional = true
 
 [dependencies.hyper-tls]
-version = "0.5"
+version = "0.4"
 optional = true
 
 [features]
