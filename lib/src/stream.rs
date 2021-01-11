@@ -54,7 +54,7 @@ impl Stream for UpdatesStream {
         };
         match result {
             Err(err) => {
-                let timeout_future = tokio::time::sleep(mut_ref.error_delay)
+                let timeout_future = tokio::time::delay_for(mut_ref.error_delay)
                     .map(|_| Ok(None))
                     .boxed();
                 mut_ref.current_request = Some(timeout_future);
